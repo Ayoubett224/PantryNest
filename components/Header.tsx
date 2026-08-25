@@ -6,9 +6,7 @@ import { store } from "@/lib/store";
 
 export default function Header() {
   const { count } = useCart();
-  return <>
-    <div className="announcement">Clear pricing • Policy links on every page • Customer support before and after purchase</div>
-    <header className="header container">
+  return <>`r`n    <header className="header container">
       <Link className="brand" href="/">{store.name}</Link>
       <nav className="nav" aria-label="Main navigation">
         <Link href="/shop">Shop</Link>
@@ -19,3 +17,4 @@ export default function Header() {
     </header>
   </>;
 }
+
