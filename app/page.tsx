@@ -16,7 +16,7 @@ export default function Home() {
         <strong>Shopping information at a glance</strong>
         <dl>
           <div><dt>Standard delivery</dt><dd>{store.shippingMinDays}–{store.shippingMaxDays} business days</dd></div>
-          <div><dt>Shipping</dt><dd>{money(store.shippingFee)} or free over {money(store.freeShippingThreshold)}</dd></div>
+          <div><dt>Shipping</dt><dd>Free shipping on all orders</dd></div>
           <div><dt>Returns</dt><dd>Accepted within {store.returnDays} days under our return policy</dd></div>
           <div><dt>Support</dt><dd>{store.email}</dd></div>
         </dl>
