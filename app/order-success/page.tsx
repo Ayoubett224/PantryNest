@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default async function OrderSuccess({searchParams}:{searchParams:Promise<{order?:string}>}){const {order}=await searchParams;return <section className="section container narrow"><div className="success"><p className="eyebrow">Order received</p><h1>Thank you for your order.</h1><p>Your order reference is <strong>{order||"Unavailable"}</strong>. Keep this number for your records.</p><p>If you need help, use the contact details in the site footer.</p><Link className="button primary" href="/shop">Back to shop</Link></div></section>}

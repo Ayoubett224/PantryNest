@@ -1,0 +1,7 @@
+.next/
+node_modules/
+.env*
+!.env.example
+data/orders.ndjson
+data/messages.ndjson
+npm-debug.log*

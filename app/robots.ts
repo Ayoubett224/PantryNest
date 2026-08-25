@@ -1,0 +1,1 @@
+import type {MetadataRoute} from "next";import {store} from "@/lib/store";export default function robots():MetadataRoute.Robots{return{rules:{userAgent:"*",allow:"/",disallow:["/checkout","/order-success","/api/orders","/api/contact"]},sitemap:`${store.url}/sitemap.xml`,host:store.url}}
