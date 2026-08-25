@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(store.url),
   title: { default: store.name, template: `%s | ${store.name}` },
   description: store.description,
+  verification: {
+    google: "pKs29dFsYHwKfb65aTyhfy618O6QMwOm2GMNvtWZ7I4",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -19,15 +22,27 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     url: store.url,
     email: store.email,
     telephone: store.phone,
-    address: { "@type": "PostalAddress", streetAddress: store.address, addressCountry: store.country }
+    address: {
+      "@type": "PostalAddress",
+      streetAddress: store.address,
+      addressCountry: store.country,
+    },
   };
-  return <html lang="en"><body>
-    <StoreProvider>
-      <Header />
-      <main>{children}</main>
-      <Footer />
-    </StoreProvider>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{__html: JSON.stringify(org)}} />
-  </body></html>;
-}
 
+  return (
+    <html lang="en">
+      <body>
+        <StoreProvider>
+          <Header />
+          <main>{children}</main>
+          <Footer />
+        </StoreProvider>
+
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(org) }}
+        />
+      </body>
+    </html>
+  );
+}
