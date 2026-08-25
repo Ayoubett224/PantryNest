@@ -22,7 +22,8 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     address: { "@type": "PostalAddress", streetAddress: store.address, addressCountry: store.country }
   };
   return <html lang="en"><body>
-    <StoreProvider>`r`n      <Header />
+    <StoreProvider>
+      <Header />
       <main>{children}</main>
       <Footer />
     </StoreProvider>
