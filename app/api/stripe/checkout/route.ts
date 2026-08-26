@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     const name = clean(customer.name);
     const email = clean(customer.email);
     const phone = clean(customer.phone);
-    const country = clean(customer.country);
+    const country = clean(customer.country).toUpperCase();
     const address = clean(customer.address);
     const city = clean(customer.city);
     const region = clean(customer.region);
@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       !name ||
       !email.includes("@") ||
       !phone ||
+      !country ||
       !address ||
       !city ||
       !postalCode ||
@@ -55,8 +56,10 @@ export async function POST(request: Request) {
       );
     }
 
-const normalizedItems: { product: Product; quantity: number }[] =
-    rawItems.map((item: any) => {
+    const normalizedItems: {
+      product: Product;
+      quantity: number;
+    }[] = rawItems.map((item: any) => {
       const product = products.find(
         (p) => p.id === clean(item.id, 80)
       );
@@ -83,27 +86,37 @@ const normalizedItems: { product: Product; quantity: number }[] =
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
 
+      // IMPORTANT:
+      // payment form stays inside PantryNest
+      ui_mode: "custom",
+
+      payment_method_types: ["card"],
+
       customer_email: email,
 
-      line_items: normalizedItems.map(({ product, quantity }) => ({
-        quantity,
-        price_data: {
-          currency: product.currency.toLowerCase(),
-          unit_amount: Math.round(product.price * 100),
+      line_items: normalizedItems.map(
+        ({ product, quantity }) => ({
+          quantity,
+          price_data: {
+            currency: product.currency.toLowerCase(),
+            unit_amount: Math.round(product.price * 100),
 
-          product_data: {
-            name: product.title,
-            description: product.description,
-            images: product.image ? [product.image] : undefined,
+            product_data: {
+              name: product.title,
+              description: product.description,
+              images: product.image
+                ? [product.image]
+                : undefined,
+            },
           },
-        },
-      })),
+        })
+      ),
 
-      success_url:
-        `${store.url}/order-success?order=${encodeURIComponent(orderId)}&payment=stripe`,
-
-      cancel_url:
-        `${store.url}/checkout?payment=cancelled`,
+      return_url:
+        `${store.url}/order-success` +
+        `?order=${encodeURIComponent(orderId)}` +
+        `&payment=stripe` +
+        `&session_id={CHECKOUT_SESSION_ID}`,
 
       metadata: {
         order_id: orderId,
@@ -117,19 +130,23 @@ const normalizedItems: { product: Product; quantity: number }[] =
       },
     });
 
-    if (!session.url) {
+    if (!session.client_secret) {
       return NextResponse.json(
-        { error: "Stripe checkout could not be created." },
+        { error: "Unable to initialize Stripe payment." },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
       ok: true,
-      url: session.url,
+      clientSecret: session.client_secret,
+      orderId,
     });
   } catch (error) {
-    if (error instanceof Error && error.message === "INVALID_ITEM") {
+    if (
+      error instanceof Error &&
+      error.message === "INVALID_ITEM"
+    ) {
       return NextResponse.json(
         { error: "One or more products are unavailable." },
         { status: 400 }
@@ -139,7 +156,7 @@ const normalizedItems: { product: Product; quantity: number }[] =
     console.error("Stripe checkout error:", error);
 
     return NextResponse.json(
-      { error: "Unable to start Stripe checkout." },
+      { error: "Unable to start Stripe payment." },
       { status: 500 }
     );
   }
