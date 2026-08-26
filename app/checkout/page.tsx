@@ -1,101 +1,367 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import {
+  FormEvent,
+  useState,
+} from "react";
+
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+
+import { loadStripe } from "@stripe/stripe-js";
+
+import {
+  CheckoutElementsProvider,
+  PaymentElement,
+  useCheckoutElements,
+} from "@stripe/react-stripe-js/checkout";
+
 import { useCart } from "@/components/StoreProvider";
 import { money, store } from "@/lib/store";
 
-type PaymentMethod = "stripe" | "cash_on_delivery";
+type PaymentMethod =
+  | "stripe"
+  | "cash_on_delivery";
+
+const publishableKey =
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+const stripePromise = publishableKey
+  ? loadStripe(publishableKey)
+  : null;
+
+/* =========================================================
+   STRIPE CARD FORM
+========================================================= */
+
+function StripePaymentForm({
+  total,
+  orderId,
+  onBack,
+}: {
+  total: number;
+  orderId: string;
+  onBack: () => void;
+}) {
+  const checkoutState =
+    useCheckoutElements();
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState("");
+
+  async function pay(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    setError("");
+
+    if (
+      checkoutState.type !== "success"
+    ) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await checkoutState.checkout.confirm({
+        returnUrl:
+          `${window.location.origin}/order-success` +
+          `?order=${encodeURIComponent(orderId)}` +
+          `&payment=stripe`,
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Payment could not be completed."
+      );
+
+      setLoading(false);
+    }
+  }
+
+  if (
+    checkoutState.type === "loading"
+  ) {
+    return (
+      <div className="checkout-form">
+        <h2>Secure card payment</h2>
+
+        <p className="fineprint">
+          Loading secure payment form...
+        </p>
+      </div>
+    );
+  }
+
+  if (
+    checkoutState.type === "error"
+  ) {
+    return (
+      <div className="checkout-form">
+        <h2>Secure card payment</h2>
+
+        <p className="error">
+          {checkoutState.error.message}
+        </p>
+
+        <button
+          type="button"
+          className="button full"
+          onClick={onBack}
+        >
+          Back to checkout
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <form
+      onSubmit={pay}
+      className="checkout-form"
+    >
+      <h2>Credit / Debit Card</h2>
+
+      <p className="fineprint">
+        Enter your card details below.
+        Your payment information is
+        securely processed by Stripe.
+      </p>
+
+      <div
+        style={{
+          marginTop: "22px",
+          marginBottom: "24px",
+        }}
+      >
+        <PaymentElement
+          options={{
+            layout: "tabs",
+          }}
+        />
+      </div>
+
+      {error && (
+        <p className="error">
+          {error}
+        </p>
+      )}
+
+      <button
+        type="submit"
+        className="button primary full"
+        disabled={loading}
+      >
+        {loading
+          ? "Processing payment..."
+          : `Pay ${money(total)}`}
+      </button>
+
+      <button
+        type="button"
+        onClick={onBack}
+        disabled={loading}
+        style={{
+          width: "100%",
+          marginTop: "14px",
+          padding: "8px",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          textDecoration: "underline",
+        }}
+      >
+        ← Back to checkout details
+      </button>
+    </form>
+  );
+}
+
+/* =========================================================
+   CHECKOUT PAGE
+========================================================= */
 
 export default function Checkout() {
-  const { items, subtotal, clear } = useCart();
+  const {
+    items,
+    subtotal,
+    clear,
+  } = useCart();
+
   const router = useRouter();
 
-  const [paymentMethod, setPaymentMethod] =
+  const [
+    paymentMethod,
+    setPaymentMethod,
+  ] =
     useState<PaymentMethod>("stripe");
 
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
 
-  const shipping = useMemo(
-    () =>
-      subtotal === 0
-        ? 0
-        : subtotal >= store.freeShippingThreshold
-          ? 0
-          : store.shippingFee,
-    [subtotal]
-  );
+  const [
+    error,
+    setError,
+  ] = useState("");
 
-  const total = subtotal + shipping;
+  const [
+    clientSecret,
+    setClientSecret,
+  ] =
+    useState<string | null>(null);
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  const [
+    stripeOrderId,
+    setStripeOrderId,
+  ] =
+    useState<string | null>(null);
 
-    if (!items.length) return;
+  /*
+   * PantryNest currently uses
+   * free shipping on all orders.
+   *
+   * This also keeps the amount shown
+   * here identical to the Stripe total.
+   */
+  const shipping = 0;
+
+  const total =
+    subtotal + shipping;
+
+  async function submit(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+
+    if (!items.length) {
+      return;
+    }
 
     setLoading(true);
     setError("");
 
-    const form = new FormData(e.currentTarget);
+    const form =
+      new FormData(event.currentTarget);
 
-    const customer = Object.fromEntries(form.entries());
+    const customer =
+      Object.fromEntries(
+        form.entries()
+      );
 
-    const cartItems = items.map((x) => ({
-      id: x.product.id,
-      quantity: x.quantity,
-    }));
+    const cartItems =
+      items.map((item) => ({
+        id: item.product.id,
+        quantity: item.quantity,
+      }));
 
     try {
-      if (paymentMethod === "stripe") {
-        const res = await fetch("/api/stripe/checkout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            customer,
-            items: cartItems,
-          }),
-        });
+      /* ===============================================
+         STRIPE CARD PAYMENT
+      =============================================== */
 
-        const body = await res.json();
-
-        if (!res.ok || !body.url) {
+      if (
+        paymentMethod === "stripe"
+      ) {
+        if (!publishableKey) {
           throw new Error(
-            body.error || "Unable to start secure payment."
+            "Stripe publishable key is missing."
           );
         }
 
-        window.location.href = body.url;
+        const response =
+          await fetch(
+            "/api/stripe/checkout",
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body: JSON.stringify({
+                customer,
+                items: cartItems,
+              }),
+            }
+          );
+
+        const body =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !body.clientSecret ||
+          !body.orderId
+        ) {
+          throw new Error(
+            body.error ||
+              "Unable to initialize secure payment."
+          );
+        }
+
+        setStripeOrderId(
+          body.orderId
+        );
+
+        setClientSecret(
+          body.clientSecret
+        );
+
+        setLoading(false);
+
         return;
       }
 
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          customer,
-          items: cartItems,
-          paymentMethod: "cash_on_delivery",
-        }),
-      });
+      /* ===============================================
+         CASH ON DELIVERY
+      =============================================== */
 
-      const body = await res.json();
+      const response =
+        await fetch(
+          "/api/orders",
+          {
+            method: "POST",
 
-      if (!res.ok) {
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              customer,
+              items: cartItems,
+
+              paymentMethod:
+                "cash_on_delivery",
+            }),
+          }
+        );
+
+      const body =
+        await response.json();
+
+      if (!response.ok) {
         throw new Error(
-          body.error || "We could not place your order."
+          body.error ||
+            "We could not place your order."
         );
       }
 
       clear();
 
       router.push(
-        `/order-success?order=${encodeURIComponent(body.orderId)}`
+        `/order-success?order=${encodeURIComponent(
+          body.orderId
+        )}&payment=cod`
       );
     } catch (err) {
       setError(
@@ -108,15 +374,24 @@ export default function Checkout() {
     }
   }
 
+  /* =====================================================
+     EMPTY CART
+  ===================================================== */
+
   if (!items.length) {
     return (
       <section className="section container">
         <h1>Checkout</h1>
 
         <div className="empty">
-          <p>Your cart is empty.</p>
+          <p>
+            Your cart is empty.
+          </p>
 
-          <Link href="/shop" className="button primary">
+          <Link
+            href="/shop"
+            className="button primary"
+          >
             Shop products
           </Link>
         </div>
@@ -124,178 +399,300 @@ export default function Checkout() {
     );
   }
 
+  /* =====================================================
+     PAGE
+  ===================================================== */
+
   return (
     <section className="section container">
       <h1>Checkout</h1>
 
       <p className="lead small">
-        Review your order and choose your payment method.
+        Review your order and choose
+        your payment method.
       </p>
 
       <div className="checkout-grid">
-        <form onSubmit={submit} className="checkout-form">
-          <h2>Contact & delivery</h2>
 
-          <div className="form-grid">
-            <label>
-              Full name
-              <input
-                name="name"
-                required
-                autoComplete="name"
-              />
-            </label>
+        {/* =============================================
+            STRIPE PAYMENT ELEMENT
+        ============================================= */}
 
-            <label>
-              Email
-              <input
-                type="email"
-                name="email"
-                required
-                autoComplete="email"
-              />
-            </label>
+        {clientSecret &&
+        stripeOrderId ? (
+          <div>
+            <CheckoutElementsProvider
+              stripe={stripePromise}
+              options={{
+                clientSecret,
 
-            <label>
-              Phone
-              <input
-                name="phone"
-                required
-                autoComplete="tel"
-              />
-            </label>
+                elementsOptions: {
+                  appearance: {
+                    theme: "stripe",
 
-            <label>
-              Country
-              <input
-                name="country"
-                required
-                defaultValue={store.country}
-                autoComplete="country-name"
-              />
-            </label>
+                    variables: {
+                      borderRadius:
+                        "8px",
+                    },
+                  },
+                },
+              }}
+            >
+              <StripePaymentForm
+                total={total}
+                orderId={
+                  stripeOrderId
+                }
+                onBack={() => {
+                  setClientSecret(
+                    null
+                  );
 
-            <label className="wide">
-              Street address
-              <input
-                name="address"
-                required
-                autoComplete="street-address"
+                  setStripeOrderId(
+                    null
+                  );
+                }}
               />
-            </label>
-
-            <label>
-              City
-              <input
-                name="city"
-                required
-                autoComplete="address-level2"
-              />
-            </label>
-
-            <label>
-              State / Region
-              <input
-                name="region"
-                required
-                autoComplete="address-level1"
-              />
-            </label>
-
-            <label>
-              Postal code
-              <input
-                name="postalCode"
-                required
-                autoComplete="postal-code"
-              />
-            </label>
+            </CheckoutElementsProvider>
           </div>
+        ) : (
+          /* ===========================================
+             CUSTOMER + PAYMENT SELECTION
+          =========================================== */
 
-          <h2>Payment</h2>
-
-          <label className="payment-box">
-            <input
-              type="radio"
-              name="paymentMethod"
-              checked={paymentMethod === "stripe"}
-              onChange={() => setPaymentMethod("stripe")}
-            />
-
-            <div>
-              <strong>Credit / Debit Card</strong>
-
-              <p>
-                Pay securely online with Stripe.
-              </p>
-            </div>
-          </label>
-
-          <label className="payment-box">
-            <input
-              type="radio"
-              name="paymentMethod"
-              checked={paymentMethod === "cash_on_delivery"}
-              onChange={() =>
-                setPaymentMethod("cash_on_delivery")
-              }
-            />
-
-            <div>
-              <strong>Cash on Delivery (COD)</strong>
-
-              <p>
-                Pay the full order total when your parcel
-                is delivered.
-              </p>
-            </div>
-          </label>
-
-          <label className="check">
-            <input
-              type="checkbox"
-              name="termsAccepted"
-              value="yes"
-              required
-            />
-
-            <span>
-              I agree to the{" "}
-              <Link href="/policies/terms">
-                Terms & Conditions
-              </Link>{" "}
-              and acknowledge the{" "}
-              <Link href="/policies/returns">
-                Returns & Refunds Policy
-              </Link>.
-            </span>
-          </label>
-
-          {error && <p className="error">{error}</p>}
-
-          <button
-            className="button primary full"
-            disabled={loading}
+          <form
+            onSubmit={submit}
+            className="checkout-form"
           >
-            {loading
-              ? "Processing..."
-              : paymentMethod === "stripe"
-                ? "Continue to secure payment"
-                : "Place COD order"}
-          </button>
-        </form>
+            <h2>
+              Contact & delivery
+            </h2>
+
+            <div className="form-grid">
+
+              <label>
+                Full name
+
+                <input
+                  name="name"
+                  required
+                  autoComplete="name"
+                />
+              </label>
+
+              <label>
+                Email
+
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  autoComplete="email"
+                />
+              </label>
+
+              <label>
+                Phone
+
+                <input
+                  name="phone"
+                  required
+                  autoComplete="tel"
+                />
+              </label>
+
+              <label>
+                Country
+
+                <input
+                  name="country"
+                  required
+                  defaultValue={
+                    store.country
+                  }
+                  autoComplete="country-name"
+                />
+              </label>
+
+              <label className="wide">
+                Street address
+
+                <input
+                  name="address"
+                  required
+                  autoComplete="street-address"
+                />
+              </label>
+
+              <label>
+                City
+
+                <input
+                  name="city"
+                  required
+                  autoComplete="address-level2"
+                />
+              </label>
+
+              <label>
+                State / Region
+
+                <input
+                  name="region"
+                  required
+                  autoComplete="address-level1"
+                />
+              </label>
+
+              <label>
+                Postal code
+
+                <input
+                  name="postalCode"
+                  required
+                  autoComplete="postal-code"
+                />
+              </label>
+            </div>
+
+            <h2>
+              Payment
+            </h2>
+
+            {/* CARD */}
+
+            <label className="payment-box">
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="stripe"
+                checked={
+                  paymentMethod ===
+                  "stripe"
+                }
+                onChange={() =>
+                  setPaymentMethod(
+                    "stripe"
+                  )
+                }
+              />
+
+              <div>
+                <strong>
+                  Credit / Debit Card
+                </strong>
+
+                <p>
+                  Visa, Mastercard and
+                  other supported cards.
+                  Payment is securely
+                  processed by Stripe
+                  without leaving this
+                  website.
+                </p>
+              </div>
+            </label>
+
+            {/* COD */}
+
+            <label className="payment-box">
+              <input
+                type="radio"
+                name="paymentMethod"
+                value="cash_on_delivery"
+                checked={
+                  paymentMethod ===
+                  "cash_on_delivery"
+                }
+                onChange={() =>
+                  setPaymentMethod(
+                    "cash_on_delivery"
+                  )
+                }
+              />
+
+              <div>
+                <strong>
+                  Cash on Delivery (COD)
+                </strong>
+
+                <p>
+                  Pay the full order
+                  amount when your
+                  parcel is delivered.
+                </p>
+              </div>
+            </label>
+
+            {/* TERMS */}
+
+            <label className="check">
+              <input
+                type="checkbox"
+                name="termsAccepted"
+                value="yes"
+                required
+              />
+
+              <span>
+                I agree to the{" "}
+
+                <Link href="/policies/terms">
+                  Terms & Conditions
+                </Link>
+
+                {" "}and acknowledge the{" "}
+
+                <Link href="/policies/returns">
+                  Returns & Refunds Policy
+                </Link>
+                .
+              </span>
+            </label>
+
+            {error && (
+              <p className="error">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              className="button primary full"
+              disabled={loading}
+            >
+              {loading
+                ? "Processing..."
+                : paymentMethod ===
+                    "stripe"
+                  ? "Continue to card payment"
+                  : "Place COD order"}
+            </button>
+          </form>
+        )}
+
+        {/* =============================================
+            ORDER SUMMARY
+        ============================================= */}
 
         <aside className="summary">
           <h2>Final total</h2>
 
-          {items.map((x) => (
-            <div key={x.product.id}>
+          {items.map((item) => (
+            <div
+              key={item.product.id}
+            >
               <span>
-                {x.product.title} × {x.quantity}
+                {item.product.title}
+                {" × "}
+                {item.quantity}
               </span>
 
               <strong>
-                {money(x.product.price * x.quantity)}
+                {money(
+                  item.product.price *
+                    item.quantity
+                )}
               </strong>
             </div>
           ))}
@@ -303,25 +700,45 @@ export default function Checkout() {
           <hr />
 
           <div>
-            <span>Subtotal</span>
-            <strong>{money(subtotal)}</strong>
+            <span>
+              Subtotal
+            </span>
+
+            <strong>
+              {money(subtotal)}
+            </strong>
           </div>
 
           <div>
-            <span>Shipping</span>
+            <span>
+              Shipping
+            </span>
+
             <strong>
-              {shipping === 0 ? "Free" : money(shipping)}
+              Free
             </strong>
           </div>
 
           <div className="total">
-            <span>Total due</span>
-            <strong>{money(total)}</strong>
+            <span>
+              Total due
+            </span>
+
+            <strong>
+              {money(total)}
+            </strong>
           </div>
 
           <p className="fineprint">
-            Estimated delivery: {store.shippingMinDays}–
-            {store.shippingMaxDays} business days.
+            Estimated delivery:{" "}
+            {store.shippingMinDays}–
+            {store.shippingMaxDays}{" "}
+            business days.
+          </p>
+
+          <p className="fineprint">
+            Secure card payments are
+            processed by Stripe.
           </p>
         </aside>
       </div>
