@@ -36,11 +36,9 @@ const stripePromise = publishableKey
 
 function StripePaymentForm({
   total,
-  orderId,
   onBack,
 }: {
   total: number;
-  orderId: string;
   onBack: () => void;
 }) {
   const checkoutState =
@@ -68,12 +66,15 @@ function StripePaymentForm({
     setLoading(true);
 
     try {
-      await checkoutState.checkout.confirm({
-        returnUrl:
-          `${window.location.origin}/order-success` +
-          `?order=${encodeURIComponent(orderId)}` +
-          `&payment=stripe`,
-      });
+      const result = await checkoutState.checkout.confirm();
+
+if (result.type === "error") {
+  setError(
+    result.error.message ||
+      "Payment could not be completed."
+  );
+  setLoading(false);
+}
     } catch (err) {
       setError(
         err instanceof Error
@@ -440,9 +441,7 @@ export default function Checkout() {
             >
               <StripePaymentForm
                 total={total}
-                orderId={
-                  stripeOrderId
-                }
+                
                 onBack={() => {
                   setClientSecret(
                     null
