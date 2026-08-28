@@ -1,1 +1,82 @@
-import {businessDisplayName,store} from "@/lib/store";export default function Privacy(){return <section className="section container narrow prose"><p className="eyebrow">Store policy</p><h1>Privacy Policy</h1><p><strong>Last updated:</strong> August 25, 2026</p><p>This policy explains how {businessDisplayName} handles information submitted through {store.name}.</p><h2>Information we collect</h2><p>When you place an order or contact us, we may collect your name, email address, phone number, delivery address, order details, and the content of support messages. Our Cash on Delivery checkout does not request or collect payment-card details.</p><h2>Why we use it</h2><p>We use this information to process and deliver orders, provide customer service, prevent misuse, maintain business records, and meet legal obligations that apply to us.</p><h2>Sharing</h2><p>We do not sell customer contact information. We may share only the information reasonably needed with service providers involved in hosting, delivery, communications, analytics, fraud prevention, accounting, or legal compliance.</p><h2>Retention and security</h2><p>We retain information only as long as reasonably required for the purposes above and apply reasonable technical and organizational measures to protect it. Internet transmission and storage cannot be guaranteed to be completely secure.</p><h2>Your choices</h2><p>Depending on applicable law, you may have rights to request access, correction, deletion, restriction, or other handling of your personal information. Contact us to make a request.</p><h2>Contact</h2><p>{businessDisplayName}<br/>{store.address}<br/>{store.email}<br/>{store.phone}</p></section>}
+import { businessDisplayName, store } from "@/lib/store";
+
+export default function Privacy() {
+  return (
+    <section className="section container narrow prose">
+      <p className="eyebrow">Store policy</p>
+      <h1>Privacy Policy</h1>
+
+      <p>
+        <strong>Last updated:</strong> August 28, 2026
+      </p>
+
+      <p>
+        This policy explains how {businessDisplayName} handles
+        information submitted through {store.name}.
+      </p>
+
+      <h2>Information we collect</h2>
+
+      <p>
+        When you place an order or contact us, we may collect your name,
+        email address, phone number, delivery address, order details,
+        and information contained in customer-support messages.
+      </p>
+
+      <h2>Payment information</h2>
+
+      <p>
+        Card payments are securely processed by Stripe. PantryNest does
+        not directly receive or store your full card number, expiration
+        date, or card security code.
+      </p>
+
+      <h2>Why we use your information</h2>
+
+      <p>
+        We use customer information to process orders, arrange delivery,
+        provide customer service, prevent misuse and fraud, maintain
+        appropriate business records, and meet applicable legal
+        obligations.
+      </p>
+
+      <h2>Sharing</h2>
+
+      <p>
+        We do not sell customer contact information. We may share
+        information when reasonably necessary with service providers
+        involved in payment processing, website hosting, delivery,
+        communications, fraud prevention, accounting, or legal
+        compliance.
+      </p>
+
+      <h2>Retention and security</h2>
+
+      <p>
+        We retain information only for as long as reasonably necessary
+        for the purposes described above and apply reasonable technical
+        and organizational measures to protect it.
+      </p>
+
+      <h2>Your choices</h2>
+
+      <p>
+        Depending on applicable law, you may have rights to request
+        access, correction, deletion, restriction, or other handling
+        of your personal information. Contact us to make a request.
+      </p>
+
+      <h2>Contact</h2>
+
+      <p>
+        {businessDisplayName}
+        <br />
+        {store.address}
+        <br />
+        {store.email}
+        <br />
+        {store.phone}
+      </p>
+    </section>
+  );
+}
