@@ -5,9 +5,7 @@ import {
   useState,
 } from "react";
 
-import { useRouter } from "next/navigation";
 import Link from "next/link";
-
 import { loadStripe } from "@stripe/stripe-js";
 
 import {
@@ -19,10 +17,6 @@ import {
 import { useCart } from "@/components/StoreProvider";
 import { money, store } from "@/lib/store";
 
-type PaymentMethod =
-  | "stripe"
-  | "cash_on_delivery";
-
 const publishableKey =
   process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
@@ -31,7 +25,7 @@ const stripePromise = publishableKey
   : null;
 
 /* =========================================================
-   STRIPE CARD FORM
+   STRIPE PAYMENT FORM
 ========================================================= */
 
 function StripePaymentForm({
@@ -66,15 +60,17 @@ function StripePaymentForm({
     setLoading(true);
 
     try {
-      const result = await checkoutState.checkout.confirm();
+      const result =
+        await checkoutState.checkout.confirm();
 
-if (result.type === "error") {
-  setError(
-    result.error.message ||
-      "Payment could not be completed."
-  );
-  setLoading(false);
-}
+      if (result.type === "error") {
+        setError(
+          result.error.message ||
+            "Payment could not be completed."
+        );
+
+        setLoading(false);
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -131,8 +127,8 @@ if (result.type === "error") {
 
       <p className="fineprint">
         Enter your card details below.
-        Your payment information is
-        securely processed by Stripe.
+        Payments are securely processed
+        by Stripe.
       </p>
 
       <div
@@ -178,30 +174,21 @@ if (result.type === "error") {
           textDecoration: "underline",
         }}
       >
-        ← Back to checkout details
+        ← Edit delivery details
       </button>
     </form>
   );
 }
 
 /* =========================================================
-   CHECKOUT PAGE
+   CHECKOUT
 ========================================================= */
 
 export default function Checkout() {
   const {
     items,
     subtotal,
-    clear,
   } = useCart();
-
-  const router = useRouter();
-
-  const [
-    paymentMethod,
-    setPaymentMethod,
-  ] =
-    useState<PaymentMethod>("stripe");
 
   const [
     loading,
@@ -219,19 +206,7 @@ export default function Checkout() {
   ] =
     useState<string | null>(null);
 
-  const [
-    stripeOrderId,
-    setStripeOrderId,
-  ] =
-    useState<string | null>(null);
-
-  /*
-   * PantryNest currently uses
-   * free shipping on all orders.
-   *
-   * This also keeps the amount shown
-   * here identical to the Stripe total.
-   */
+  // Free shipping on all orders
   const shipping = 0;
 
   const total =
@@ -264,71 +239,15 @@ export default function Checkout() {
       }));
 
     try {
-      /* ===============================================
-         STRIPE CARD PAYMENT
-      =============================================== */
-
-      if (
-        paymentMethod === "stripe"
-      ) {
-        if (!publishableKey) {
-          throw new Error(
-            "Stripe publishable key is missing."
-          );
-        }
-
-        const response =
-          await fetch(
-            "/api/stripe/checkout",
-            {
-              method: "POST",
-
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
-
-              body: JSON.stringify({
-                customer,
-                items: cartItems,
-              }),
-            }
-          );
-
-        const body =
-          await response.json();
-
-        if (
-          !response.ok ||
-          !body.clientSecret ||
-          !body.orderId
-        ) {
-          throw new Error(
-            body.error ||
-              "Unable to initialize secure payment."
-          );
-        }
-
-        setStripeOrderId(
-          body.orderId
+      if (!publishableKey) {
+        throw new Error(
+          "Stripe publishable key is missing."
         );
-
-        setClientSecret(
-          body.clientSecret
-        );
-
-        setLoading(false);
-
-        return;
       }
-
-      /* ===============================================
-         CASH ON DELIVERY
-      =============================================== */
 
       const response =
         await fetch(
-          "/api/orders",
+          "/api/stripe/checkout",
           {
             method: "POST",
 
@@ -340,9 +259,6 @@ export default function Checkout() {
             body: JSON.stringify({
               customer,
               items: cartItems,
-
-              paymentMethod:
-                "cash_on_delivery",
             }),
           }
         );
@@ -350,20 +266,21 @@ export default function Checkout() {
       const body =
         await response.json();
 
-      if (!response.ok) {
+      if (
+        !response.ok ||
+        !body.clientSecret
+      ) {
         throw new Error(
           body.error ||
-            "We could not place your order."
+            "Unable to initialize secure payment."
         );
       }
 
-      clear();
-
-      router.push(
-        `/order-success?order=${encodeURIComponent(
-          body.orderId
-        )}&payment=cod`
+      setClientSecret(
+        body.clientSecret
       );
+
+      setLoading(false);
     } catch (err) {
       setError(
         err instanceof Error
@@ -374,10 +291,6 @@ export default function Checkout() {
       setLoading(false);
     }
   }
-
-  /* =====================================================
-     EMPTY CART
-  ===================================================== */
 
   if (!items.length) {
     return (
@@ -400,27 +313,18 @@ export default function Checkout() {
     );
   }
 
-  /* =====================================================
-     PAGE
-  ===================================================== */
-
   return (
     <section className="section container">
       <h1>Checkout</h1>
 
       <p className="lead small">
-        Review your order and choose
-        your payment method.
+        Review your order and complete
+        your secure card payment.
       </p>
 
       <div className="checkout-grid">
 
-        {/* =============================================
-            STRIPE PAYMENT ELEMENT
-        ============================================= */}
-
-        {clientSecret &&
-        stripeOrderId ? (
+        {clientSecret ? (
           <div>
             <CheckoutElementsProvider
               stripe={stripePromise}
@@ -441,24 +345,13 @@ export default function Checkout() {
             >
               <StripePaymentForm
                 total={total}
-                
-                onBack={() => {
-                  setClientSecret(
-                    null
-                  );
-
-                  setStripeOrderId(
-                    null
-                  );
-                }}
+                onBack={() =>
+                  setClientSecret(null)
+                }
               />
             </CheckoutElementsProvider>
           </div>
         ) : (
-          /* ===========================================
-             CUSTOMER + PAYMENT SELECTION
-          =========================================== */
-
           <form
             onSubmit={submit}
             className="checkout-form"
@@ -471,7 +364,6 @@ export default function Checkout() {
 
               <label>
                 Full name
-
                 <input
                   name="name"
                   required
@@ -481,7 +373,6 @@ export default function Checkout() {
 
               <label>
                 Email
-
                 <input
                   type="email"
                   name="email"
@@ -492,7 +383,6 @@ export default function Checkout() {
 
               <label>
                 Phone
-
                 <input
                   name="phone"
                   required
@@ -502,7 +392,6 @@ export default function Checkout() {
 
               <label>
                 Country
-
                 <input
                   name="country"
                   required
@@ -515,7 +404,6 @@ export default function Checkout() {
 
               <label className="wide">
                 Street address
-
                 <input
                   name="address"
                   required
@@ -525,7 +413,6 @@ export default function Checkout() {
 
               <label>
                 City
-
                 <input
                   name="city"
                   required
@@ -535,7 +422,6 @@ export default function Checkout() {
 
               <label>
                 State / Region
-
                 <input
                   name="region"
                   required
@@ -545,7 +431,6 @@ export default function Checkout() {
 
               <label>
                 Postal code
-
                 <input
                   name="postalCode"
                   required
@@ -554,76 +439,23 @@ export default function Checkout() {
               </label>
             </div>
 
-            <h2>
-              Payment
-            </h2>
+            <h2>Payment</h2>
 
-            {/* CARD */}
-
-            <label className="payment-box">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="stripe"
-                checked={
-                  paymentMethod ===
-                  "stripe"
-                }
-                onChange={() =>
-                  setPaymentMethod(
-                    "stripe"
-                  )
-                }
-              />
-
+            <div className="payment-box">
               <div>
                 <strong>
                   Credit / Debit Card
                 </strong>
 
                 <p>
-                  Visa, Mastercard and
-                  other supported cards.
-                  Payment is securely
-                  processed by Stripe
+                  Secure payment powered
+                  by Stripe. Card details
+                  are entered securely
                   without leaving this
                   website.
                 </p>
               </div>
-            </label>
-
-            {/* COD */}
-
-            <label className="payment-box">
-              <input
-                type="radio"
-                name="paymentMethod"
-                value="cash_on_delivery"
-                checked={
-                  paymentMethod ===
-                  "cash_on_delivery"
-                }
-                onChange={() =>
-                  setPaymentMethod(
-                    "cash_on_delivery"
-                  )
-                }
-              />
-
-              <div>
-                <strong>
-                  Cash on Delivery (COD)
-                </strong>
-
-                <p>
-                  Pay the full order
-                  amount when your
-                  parcel is delivered.
-                </p>
-              </div>
-            </label>
-
-            {/* TERMS */}
+            </div>
 
             <label className="check">
               <input
@@ -661,18 +493,11 @@ export default function Checkout() {
               disabled={loading}
             >
               {loading
-                ? "Processing..."
-                : paymentMethod ===
-                    "stripe"
-                  ? "Continue to card payment"
-                  : "Place COD order"}
+                ? "Preparing secure payment..."
+                : "Continue to card payment"}
             </button>
           </form>
         )}
-
-        {/* =============================================
-            ORDER SUMMARY
-        ============================================= */}
 
         <aside className="summary">
           <h2>Final total</h2>
@@ -699,9 +524,7 @@ export default function Checkout() {
           <hr />
 
           <div>
-            <span>
-              Subtotal
-            </span>
+            <span>Subtotal</span>
 
             <strong>
               {money(subtotal)}
@@ -709,9 +532,7 @@ export default function Checkout() {
           </div>
 
           <div>
-            <span>
-              Shipping
-            </span>
+            <span>Shipping</span>
 
             <strong>
               Free
@@ -719,9 +540,7 @@ export default function Checkout() {
           </div>
 
           <div className="total">
-            <span>
-              Total due
-            </span>
+            <span>Total due</span>
 
             <strong>
               {money(total)}
@@ -736,7 +555,7 @@ export default function Checkout() {
           </p>
 
           <p className="fineprint">
-            Secure card payments are
+            Secure payments are
             processed by Stripe.
           </p>
         </aside>
